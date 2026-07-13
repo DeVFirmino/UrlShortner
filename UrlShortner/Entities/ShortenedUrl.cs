@@ -1,4 +1,4 @@
-namespace UrlShortener.Models;
+namespace UrlShortner.Entities;
  
  //) Cassandra, 'Code' partition key,
 // 

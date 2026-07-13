@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-using UrlShortener.Models;
-using UrlShortner.Services;   
+using UrlShortner.Entities;
+using UrlShortner.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +20,19 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+
+app.MapPost("/shorten", (ShortenUrlRequest req, HttpContext http, ShortCodeGenerator generator) =>
+{
+    // validate
+    if (string.IsNullOrWhiteSpace(req.Url) ||
+        !Uri.TryCreate(req.Url, UriKind.Absolute, out _))
+    {
+        return Results.BadRequest(new { error = "URL invalid" });
+    }
+});
+
 app.UseHttpsRedirection();
 
 app.Run();
+
+
