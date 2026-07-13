@@ -1,16 +1,27 @@
 using System.Collections.Concurrent;
 using UrlShortner.Entities;
 using UrlShortner.Services;
-
+using Cassandra;
+using ISession = Cassandra.ISession;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var cluster = Cluster.Builder()
+    .AddContactPoint("127.0.0.1")
+    .WithPort(9042)
+    .Build();
+var session = cluster.Connect("url_shortener");   // "url_shortener" = o keyspace que você criou
+builder.Services.AddSingleton<ISession>(session);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<ShortCodeGenerator>();
-builder.Services.AddSingleton<IUrlStore, InMemoryUrlStore>();     
+builder.Services.AddSingleton<IUrlStore, CassandraUrlStore>();     
 builder.Services.AddScoped<IUrlShorteningService, UrlShorteningService>();
+
+
+
 
 var app = builder.Build();
 
@@ -20,6 +31,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseHttpsRedirection();
 
 app.MapPost("/shorten", async (ShortenUrlRequest req, HttpContext http, IUrlShorteningService service) =>
 {
@@ -45,7 +57,4 @@ app.MapGet("/{code}", async (string code, IUrlShorteningService service) =>
 });
 
 app.Run();
-
-app.UseHttpsRedirection();
-
 
