@@ -9,9 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<ShortCodeGenerator>();
+builder.Services.AddSingleton<IUrlStore, InMemoryUrlStore>();     
+builder.Services.AddScoped<IUrlShorteningService, UrlShorteningService>();
 
-// Code -> ShortenedUrl. Vira Cassandra no próximo passo.
-var store = new ConcurrentDictionary<string, ShortenedUrl>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -21,18 +21,31 @@ if (app.Environment.IsDevelopment())
 }
 
 
-app.MapPost("/shorten", (ShortenUrlRequest req, HttpContext http, ShortCodeGenerator generator) =>
+app.MapPost("/shorten", async (ShortenUrlRequest req, HttpContext http, IUrlShorteningService service) =>
 {
-    // validate
     if (string.IsNullOrWhiteSpace(req.Url) ||
         !Uri.TryCreate(req.Url, UriKind.Absolute, out _))
     {
-        return Results.BadRequest(new { error = "URL invalid" });
+        return Results.BadRequest(new { error = "URL inválida" });
     }
+
+    var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
+    var entity = await service.ShortenAsync(req.Url, baseUrl);
+
+    return Results.Ok(new { entity.Code, entity.ShortUrl });
 });
 
-app.UseHttpsRedirection();
+app.MapGet("/{code}", async (string code, IUrlShorteningService service) =>
+{
+    var longUrl = await service.GetLongUrlAsync(code);
+
+    return longUrl is null
+        ? Results.NotFound(new { error = "code not found" })
+        : Results.Redirect(longUrl, permanent: false);
+});
 
 app.Run();
+
+app.UseHttpsRedirection();
 
 
