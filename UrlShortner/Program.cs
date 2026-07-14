@@ -8,14 +8,16 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var cassandraHost = builder.Configuration["CASSANDRA_HOST"] ?? "127.0.0.1";
 var cluster = Cluster.Builder()
-    .AddContactPoint("127.0.0.1")
+    .AddContactPoint(cassandraHost)
     .WithPort(9042)
     .Build();
 var session = cluster.Connect("url_shortener");   // "url_shortener" = o keyspace que você criou
 builder.Services.AddSingleton<ISession>(session);
 
-var redis = ConnectionMultiplexer.Connect("localhost:6379");
+var redisConn = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+var redis = ConnectionMultiplexer.Connect(redisConn);
 builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
 
 // Add services to the container.
