@@ -3,6 +3,8 @@ using UrlShortner.Entities;
 using UrlShortner.Services;
 using Cassandra;
 using ISession = Cassandra.ISession;
+using StackExchange.Redis;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,11 +15,18 @@ var cluster = Cluster.Builder()
 var session = cluster.Connect("url_shortener");   // "url_shortener" = o keyspace que você criou
 builder.Services.AddSingleton<ISession>(session);
 
+var redis = ConnectionMultiplexer.Connect("localhost:6379");
+builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<ShortCodeGenerator>();
-builder.Services.AddSingleton<IUrlStore, CassandraUrlStore>();     
+builder.Services.AddSingleton<CassandraUrlStore>();          // receita A: como fazer o Cassandra
+builder.Services.AddSingleton<IUrlStore>(sp =>                // receita B: o que é um IUrlStore
+    new CachedUrlStore(                                       //   → é o cache...
+        sp.GetRequiredService<CassandraUrlStore>(),           //   ...embrulhando o Cassandra (receita A)
+        sp.GetRequiredService<IConnectionMultiplexer>()));    //   ...+ o Redis (receita do passo 2)
 builder.Services.AddScoped<IUrlShorteningService, UrlShorteningService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
