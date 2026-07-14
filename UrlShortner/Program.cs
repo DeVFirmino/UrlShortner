@@ -19,6 +19,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddSingleton<ShortCodeGenerator>();
 builder.Services.AddSingleton<IUrlStore, CassandraUrlStore>();     
 builder.Services.AddScoped<IUrlShorteningService, UrlShorteningService>();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 
 
@@ -28,7 +30,8 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();   // UI em /swagger
 }
 
 app.UseHttpsRedirection();
