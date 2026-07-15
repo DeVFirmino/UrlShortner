@@ -13,7 +13,14 @@ var cluster = Cluster.Builder()
     .AddContactPoint(cassandraHost)
     .WithPort(9042)
     .Build();
-var session = cluster.Connect("url_shortener");   // "url_shortener" = o keyspace que você criou
+var session = cluster.Connect();   // conecta sem keyspace ainda
+session.Execute(
+    "CREATE KEYSPACE IF NOT EXISTS url_shortener " +
+    "WITH replication = {'class':'SimpleStrategy','replication_factor':1}");
+session.Execute(
+    "CREATE TABLE IF NOT EXISTS url_shortener.shortened_urls " +
+    "(code text PRIMARY KEY, id uuid, long_url text, short_url text, created_on_utc timestamp)");
+session.ChangeKeyspace("url_shortener");   // passa a usar o keyspace   // "url_shortener" = o keyspace que você criou
 builder.Services.AddSingleton<ISession>(session);
 
 var redisConn = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
@@ -70,5 +77,7 @@ app.MapGet("/{code}", async (string code, IUrlShorteningService service) =>
         : Results.Redirect(longUrl, permanent: false);
 });
 
+
+app.MapGet("/whoami", () => Results.Ok(new { server = Environment.MachineName }));
 app.Run();
 
