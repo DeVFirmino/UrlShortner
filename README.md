@@ -196,10 +196,4 @@ Drop your Azure screenshots into `docs/` and reference them here, e.g.:
 - **Move the database to the cloud** (Azure Cosmos DB, which speaks Cassandra) — same code, just a different address.
 - **Host the app in the cloud** (Azure Container Apps) with automatic scaling and load balancing.
 - **Cold storage (S3 / Azure Blob):** in the video, **S3** is used to park old, rarely-used links in cheap storage — moved there during quiet hours so the main database stays lean and cheap. Hot links stay in Cassandra + Redis; only "cold" ones age out. Not built here yet — it's the natural next scaling step.
-
----
-
-## Study notes
-
-I designed this on paper first. The original handwritten notes (in `docs/study-notes-*.png`) trace the same path this README follows — from the first architecture sketch to load balancing and Docker.
 ```
