@@ -154,26 +154,15 @@ dotnet run
 
 ## The Azure part
 
-> _Screenshots coming — see "What's next"._
-
 The cache runs on **Azure Cache for Redis**:
 
 - Secure (TLS-only) connection.
 - The password is kept in a local secret store, never in the repo.
 - Public access has to be turned on deliberately — it starts off, which is actually a good security default.
 
-Drop your Azure screenshots into `docs/` and reference them here, e.g.:
+Proof the app is caching in the managed cloud instance — `SCAN 0 MATCH url:*` returns the key the app wrote:
 
-```markdown
 ![Azure Redis Console — cached key](docs/azure-redis-console.png)
-![Azure Redis metrics](docs/azure-redis-metrics.png)
-```
-
-<!-- Suggested shots:
-  - Redis Console running `SCAN 0 MATCH url:*` (proves the app cached in the cloud)
-  - Overview / Metrics (the managed cache live and handling load)
-  - Access keys screen — blur the key!
--->
 
 ---
 
