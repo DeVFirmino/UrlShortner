@@ -17,7 +17,7 @@ That's it on the surface. The interesting part is everything behind it that make
 
 ## The big picture
 
-![Architecture diagram: a client hits nginx, which round-robins across three stateless app replicas; inside each replica the decorator chain runs UrlShorteningService, CachedUrlStore and CassandraUrlStore; Redis serves the cache with a 24-hour TTL and backfills on miss, and Cassandra is the source of truth](docs/img/architecture.svg)
+![Diagram showing how a person creates or opens a short link, nginx shares requests between ASP.NET Core app copies, Redis caches popular links, and Cassandra keeps every link](docs/img/architecture.svg)
 
 *Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw) — open it on [excalidraw.com](https://excalidraw.com) and re-export the SVG after changes.*
 
