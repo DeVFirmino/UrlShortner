@@ -17,19 +17,9 @@ That's it on the surface. The interesting part is everything behind it that make
 
 ## The big picture
 
-```mermaid
-flowchart TD
-    Client([Client]) --> LB[nginx — Load Balancer]
-    LB --> A1[app #1]
-    LB --> A2[app #2]
-    LB --> A3[app #3]
-    A1 --> R[(Redis — cache)]
-    A2 --> R
-    A3 --> R
-    A1 --> C[(Cassandra — database)]
-    A2 --> C
-    A3 --> C
-```
+![Architecture diagram: a client hits nginx, which round-robins across three stateless app replicas; inside each replica the decorator chain runs UrlShorteningService, CachedUrlStore and CassandraUrlStore; Redis serves the cache with a 24-hour TTL and backfills on miss, and Cassandra is the source of truth](docs/img/architecture.svg)
+
+*Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw) — open it on [excalidraw.com](https://excalidraw.com) and re-export the SVG after changes.*
 
 Three identical copies of the app run at the same time. A **load balancer** sits in front and splits the traffic between them. All three share the same **database** (Cassandra) and **cache** (Redis).
 
