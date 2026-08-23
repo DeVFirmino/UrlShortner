@@ -17,7 +17,7 @@ That's it on the surface. The interesting part is everything behind it that make
 
 ## The big picture
 
-![Diagram showing how a person creates or opens a short link, requests are shared between app copies, popular links come from a fast cache, and every link is kept in the main database](docs/img/architecture.svg)
+![Diagram showing how a person creates or opens a short link, nginx shares requests between ASP.NET Core app copies, Redis caches popular links, and Cassandra keeps every link](docs/img/architecture.svg)
 
 *Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw) — open it on [excalidraw.com](https://excalidraw.com) and re-export the SVG after changes.*
 
