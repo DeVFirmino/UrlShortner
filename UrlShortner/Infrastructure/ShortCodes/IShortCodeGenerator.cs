@@ -1,4 +1,4 @@
-namespace UrlShortner.Services;
+namespace UrlShortner.Infrastructure.ShortCodes;
 
 public interface IShortCodeGenerator
 {

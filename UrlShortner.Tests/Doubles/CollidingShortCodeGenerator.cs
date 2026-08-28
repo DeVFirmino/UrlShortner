@@ -1,4 +1,4 @@
-using UrlShortner.Services;
+using UrlShortner.Infrastructure.ShortCodes;
 
 namespace UrlShortner.Tests.Doubles;
 

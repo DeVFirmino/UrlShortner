@@ -1,5 +1,5 @@
 using UrlShortner.Entities;
-using UrlShortner.Services;
+using UrlShortner.Infrastructure.Storage;
 
 namespace UrlShortner.Tests.Doubles;
 
@@ -10,7 +10,7 @@ namespace UrlShortner.Tests.Doubles;
 /// The hold sits immediately before the store decides the winner, so the first
 /// <c>contendingCallers</c> callers all reach that decision together. Holding
 /// them any earlier — at the draw, for instance — proves nothing: the first
-/// caller released can finish claiming its code before the next one wakes, the
+/// caller released finishes claiming its code before the next one wakes, the
 /// two never overlap, and a store that races would still look correct.
 /// </para>
 /// </summary>
@@ -31,14 +31,15 @@ public sealed class ContendingUrlStore : IUrlStore, IDisposable
         _callersAtTheDecision = new CountdownEvent(contendingCallers);
     }
 
-    public Task<bool> TryInsertAsync(ShortenedUrl url)
+    public Task<bool> TryInsertAsync(ShortenedUrl url, CancellationToken cancellationToken)
     {
         HoldUntilEveryCallerIsAtTheDecision();
 
-        return _inner.TryInsertAsync(url);
+        return _inner.TryInsertAsync(url, cancellationToken);
     }
 
-    public Task<ShortenedUrl?> GetByCodeAsync(string code) => _inner.GetByCodeAsync(code);
+    public Task<ShortenedUrl?> GetByCodeAsync(string code, CancellationToken cancellationToken) =>
+        _inner.GetByCodeAsync(code, cancellationToken);
 
     public void Dispose() => _callersAtTheDecision.Dispose();
 

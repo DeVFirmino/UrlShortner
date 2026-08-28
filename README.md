@@ -31,7 +31,7 @@ The trick that makes this work: the app doesn't keep anything in its own memory 
 
 | Piece | Technology | What it's for |
 |---|---|---|
-| API | .NET 9 (Minimal API) | The two endpoints: shorten and redirect |
+| API | .NET 9 (MVC controllers) | The two endpoints: shorten and redirect |
 | Short code | Base62 | Turns a number into a short, URL-friendly code |
 | Database | Cassandra | Stores every `code → long URL`, built to scale |
 | Cache | Redis | Keeps popular links in memory for instant answers |
