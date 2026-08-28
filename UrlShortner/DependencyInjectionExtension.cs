@@ -1,5 +1,9 @@
 using Cassandra;
+using Microsoft.AspNetCore.Mvc;
 using StackExchange.Redis;
+using UrlShortner.Contracts;
+using UrlShortner.Errors;
+using UrlShortner.Filters;
 using UrlShortner.Infrastructure.ShortCodes;
 using UrlShortner.Infrastructure.Storage;
 using UrlShortner.UseCases.ResolveShortCode;
@@ -16,6 +20,19 @@ public static class DependencyInjectionExtension
         services.AddScoped<IShortenUrlUseCase, ShortenUrlUseCase>();
 
         return services;
+    }
+
+    public static IMvcBuilder AddApi(this IServiceCollection services)
+    {
+        // A body the model binder cannot read never reaches the use case, so
+        // the framework would answer for it with its own ValidationProblemDetails
+        // shape. One API, one error contract: those requests answer with the
+        // same ErrorResponse as every other failure.
+        return services
+            .AddControllers(options => options.Filters.Add<ExceptionFilter>())
+            .ConfigureApiBehaviorOptions(options =>
+                options.InvalidModelStateResponseFactory = _ => new BadRequestObjectResult(
+                    new ErrorResponse { Errors = [ErrorMessages.InvalidRequestBody] }));
     }
 
     public static IServiceCollection AddInfrastructure(
