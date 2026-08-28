@@ -13,22 +13,22 @@ public class CassandraUrlStore : IUrlStore
         _session = session;
     }
 
-
-    public async Task<bool> ExistsAsync(string code)
+    public async Task<bool> TryInsertAsync(ShortenedUrl url)
     {
-        var stmt = await _session.PrepareAsync(
-            "SELECT code FROM shortened_urls WHERE code = ?");
-        var rs = await _session.ExecuteAsync(stmt.Bind(code));
-        return rs.Any();
-    }
-
-    public async Task SaveAsync(ShortenedUrl url)
-    {
+        // IF NOT EXISTS turns the upsert into a lightweight transaction: Cassandra
+        // runs a Paxos round for the partition, so of several concurrent inserts
+        // on the same code exactly one is applied and the rest are rejected.
         var stmt = await _session.PrepareAsync(
             "INSERT INTO shortened_urls (code, id, long_url, short_url, created_on_utc) " +
-            "VALUES (?, ?, ?, ?, ?)");
-        await _session.ExecuteAsync(stmt.Bind(
+            "VALUES (?, ?, ?, ?, ?) IF NOT EXISTS");
+        var rs = await _session.ExecuteAsync(stmt.Bind(
             url.Code, url.Id, url.LongUrl, url.ShortUrl, url.CreatedOnUtc));
+
+        // A conditional insert always answers with an [applied] column. If the row
+        // is missing something is wrong, so report "not applied" and let the
+        // caller draw again rather than assume the write landed.
+        var row = rs.FirstOrDefault();
+        return row is not null && row.GetValue<bool>("[applied]");
     }
 
     public async Task<ShortenedUrl?> GetByCodeAsync(string code)

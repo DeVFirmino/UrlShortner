@@ -30,7 +30,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddSingleton<ShortCodeGenerator>();
+builder.Services.AddSingleton<IShortCodeGenerator, ShortCodeGenerator>();
 builder.Services.AddSingleton<CassandraUrlStore>();          // receita A: como fazer o Cassandra
 builder.Services.AddSingleton<IUrlStore>(sp =>                // receita B: o que é um IUrlStore
     new CachedUrlStore(                                       //   → é o cache...
