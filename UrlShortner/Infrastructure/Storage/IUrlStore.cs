@@ -1,6 +1,6 @@
 using UrlShortner.Entities;
 
-namespace UrlShortner.Services;
+namespace UrlShortner.Infrastructure.Storage;
 
 public interface IUrlStore
 {
@@ -16,7 +16,7 @@ public interface IUrlStore
     /// INSERT is an upsert, so the second write silently replaces the first and
     /// a live short link starts pointing at someone else's destination.
     /// </remarks>
-    Task<bool> TryInsertAsync(ShortenedUrl url);
+    Task<bool> TryInsertAsync(ShortenedUrl url, CancellationToken cancellationToken);
 
-    Task<ShortenedUrl?> GetByCodeAsync(string code);
+    Task<ShortenedUrl?> GetByCodeAsync(string code, CancellationToken cancellationToken);
 }
