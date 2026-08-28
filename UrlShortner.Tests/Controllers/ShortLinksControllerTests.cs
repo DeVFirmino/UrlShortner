@@ -22,7 +22,7 @@ namespace UrlShortner.Tests.Controllers;
 /// routes, the binding, the status codes and the exception filter are all
 /// checked without a Cassandra or a Redis to talk to.
 /// </summary>
-public class ShortLinksControllerTests
+public sealed class ShortLinksControllerTests
 {
     private const string Code = "aaaaaaa";
     private const string Destination = "https://example.com/page";
