@@ -1,17 +1,24 @@
 # URL Shortener — a System Design Study in .NET
 
-A URL shortener (think TinyURL / Bitly) built from scratch in **.NET 9**, with a **Cassandra** database, a **Redis** cache, an **nginx** load balancer, and a piece deployed to **Azure**.
+This software makes short links. You give it a long web address. It gives you back a short link, for example `http://localhost:8080/jxs3y2C`. When somebody opens the short link, the software sends the browser to the long address.
 
-> **Why I built this:** I watched a [system design video about architecting a URL shortener](https://www.youtube.com/watch?v=m_anIoKW7Jg) and, instead of just watching, I decided to actually build it — to really understand how the load balancer, the database, and the cache fit together, and why each choice is made. This README follows the same order I learned things.
+I built it as a study project in **.NET 9**. It uses a **Cassandra** database, a **Redis** cache, and an **nginx** load balancer. One part of it ran on **Azure**.
+
+> **Why I built this:** I watched a [system design video about a URL shortener](https://www.youtube.com/watch?v=m_anIoKW7Jg). I did not want to only watch. I built the system to understand how the load balancer, the database, and the cache work together.
 
 ---
 
 ## What it does
 
-- **Shorten:** send a long URL, get back a short code (e.g. `jxs3y2C`).
-- **Redirect:** open the short link, get sent to the original URL.
+- **Shorten:** send `POST /shorten` with a long URL. The answer is `201 Created` with a short code (for example `jxs3y2C`), the full short link, and a `Location` header.
+- **Redirect:** open `GET /{code}`. The answer is a `302` redirect to the original URL.
+- **Identify:** open `GET /whoami`. The answer names the app copy that replied.
 
-That's it on the surface. The interesting part is everything behind it that makes it fast and able to handle lots of traffic.
+Three facts to know:
+
+- The software does not remember URLs it saw before. If you send the same URL two times, you get two different codes.
+- A short link never expires. Cassandra keeps every link with no time limit.
+- The software does not count clicks. The `302` redirect keeps that possible, but no counting is built.
 
 ---
 
@@ -19,66 +26,102 @@ That's it on the surface. The interesting part is everything behind it that make
 
 ![Diagram showing how a person creates or opens a short link, nginx shares requests between ASP.NET Core app copies, Redis caches popular links, and Cassandra keeps every link](docs/img/architecture.svg)
 
-*Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw) — open it on [excalidraw.com](https://excalidraw.com) and re-export the SVG after changes.*
+*Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw) — open it on [excalidraw.com](https://excalidraw.com) and export the SVG again after changes.*
 
-Three identical copies of the app run at the same time. A **load balancer** sits in front and splits the traffic between them. All three share the same **database** (Cassandra) and **cache** (Redis).
+Three identical copies of the app run at the same time. **nginx** sits in front and gives each request to one of the copies, in rotation. All three copies share one **Cassandra** database and one **Redis** cache.
 
-The trick that makes this work: the app doesn't keep anything in its own memory — everything is stored in the database and cache. So it doesn't matter which copy answers a request; they all see the same data. That's what lets you just add more copies when traffic grows.
+The app keeps no data in its own memory. All data lives in the database and the cache. So every copy sees the same data, and any copy can answer any request. That is what lets you add more copies when traffic grows.
+
+nginx also passes the caller's `Host` header to the app. The app builds the short link from that header. So the link you get back (`http://localhost:8080/{code}`) works from outside. Without this nginx setting, the link would carry an internal host name and would not work.
+
+---
+
+## How a short link is created
+
+![Flowchart of POST /shorten: validate the URL, draw a random seven-character code, claim it in Cassandra with a conditional insert, draw again on a collision up to five times, cache the winner in Redis, answer 201, 400, or 503](docs/img/shorten-flow.svg)
+
+Step by step:
+
+1. The app checks the URL. The URL must be absolute, and its scheme must be `http` or `https`. The app rejects `ftp://`, relative paths, and empty strings with `400`.
+2. The app draws a code: 7 random characters from the base62 alphabet (`0-9`, `a-z`, `A-Z`). It does not encode a number and it keeps no counter. Seven characters give 62⁷ codes — about **3.5 trillion**.
+3. The app claims the code in Cassandra with `INSERT ... IF NOT EXISTS`. Only one request can win a code. A code is never overwritten in silence.
+4. If the code is already taken, the app draws a new code. After **5** failed draws the app stops and answers `503` with the error contract. Five collisions in a row against 3.5 trillion codes means something is broken, so retrying forever would not help.
+5. The app writes a copy of the winning link to Redis. The copy expires after 24 hours. Only a winning insert is cached, so the cache can never serve another request's destination.
+6. The app answers `201 Created` with the code and the short link.
+
+Why the conditional write matters: a plain Cassandra `INSERT` is an *upsert*. If two requests draw the same code, both writes "succeed" and the second replaces the first in silence. A "does this code exist?" check before the write does not help, because both requests can read "no" before either writes. `IF NOT EXISTS` makes Cassandra pick exactly one winner. The loser just draws again.
+
+---
+
+## How a short link is opened
+
+1. The request hits **nginx**. nginx hands it to one of the three app copies.
+2. The route only matches paths of exactly **7 characters**. A path with another length (for example `/favicon.ico`) gets a plain `404` with an empty body. It never reaches the lookup code.
+3. The app looks in **Redis** first:
+   - **Found in cache** → answer at once.
+   - **Not in cache** → read from **Cassandra**, save a copy in Redis for 24 hours, then answer.
+4. The app answers `302 Found` and the browser goes to the original URL.
+5. A 7-character code that is not in the database gets `404` with the error contract.
+
+The redirect is a `302`, not a `301`. A `301` is remembered by the browser, so later clicks never reach the server. A `302` always comes back through the server. That keeps click counting possible in the future. No counting exists today.
+
+---
+
+## Error responses
+
+Almost every error uses one JSON shape, `ErrorResponse`:
+
+```json
+{ "errors": ["The url must be an absolute http or https address."], "correlationId": null }
+```
+
+| What happened | Status | Body |
+|---|---|---|
+| URL is not an absolute `http`/`https` address | `400` | `ErrorResponse` |
+| Body cannot be read (empty, `null`, `{"url":null}`, `{"url":123}`, cut-off JSON) | `400` | `ErrorResponse` |
+| Code has 7 characters but is unknown | `404` | `ErrorResponse` |
+| Path length is not 7 characters | `404` | empty body (no route matched) |
+| 5 draws in a row hit taken codes | `503` | `ErrorResponse` |
+| Unexpected failure | `500` | `ErrorResponse` with a `correlationId` that also appears in the server log |
+| `Content-Type` is not JSON | `415` | framework `ProblemDetails`, **not** `ErrorResponse` |
+
+The `415` case is the one known answer outside the contract.
+
+---
+
+## What the software needs
+
+- **At startup** the app connects to Cassandra and to Redis immediately. If either one is not reachable, the process stops. Docker Compose waits for the Cassandra health check before it starts the app copies. For Redis it only waits for the container to start. There is no restart policy.
+- **At startup** the app also creates its own keyspace and table in Cassandra if they do not exist. A fresh database works without manual setup. A production service would do this in a deployment step instead.
+- **At runtime** Redis stays required. Every read and write goes through the cache layer first. If Redis goes down while the app runs, both endpoints answer `500`. The app does not fall back to Cassandra when the cache fails. This fail-fast design is a deliberate choice for a study project.
 
 ---
 
 ## Tech stack
 
-| Piece | Technology | What it's for |
+| Piece | Technology | What it does here |
 |---|---|---|
-| API | .NET 9 (Minimal API) | The two endpoints: shorten and redirect |
-| Short code | Base62 | Turns a number into a short, URL-friendly code |
-| Database | Cassandra | Stores every `code → long URL`, built to scale |
-| Cache | Redis | Keeps popular links in memory for instant answers |
-| Load balancer | nginx | Splits traffic across the app copies |
-| Docs | Swagger | Click-to-test the API in the browser |
-| Packaging | Docker | Wraps the app so it runs the same anywhere |
-| Orchestration | Docker Compose | Starts everything together with one command |
-| Cloud | Azure Cache for Redis | Managed cache running in Azure |
+| API | .NET 9 (MVC controllers) | The endpoints: shorten, redirect, whoami |
+| Short code | Random base62 draw | 7 random characters from `0-9`, `a-z`, `A-Z` |
+| Database | Cassandra | Keeps every `code → long URL` row, with no expiry |
+| Cache | Redis | Keeps recent links in memory for 24 hours |
+| Load balancer | nginx | Splits traffic across the app copies and forwards the caller's `Host` |
+| Docs | Swagger | Click-to-test UI — **Development only** (`dotnet run`); the Compose stack runs in Production and has no Swagger |
+| Packaging | Docker | Two-stage build; the final image holds only the compiled app |
+| Orchestration | Docker Compose | Starts nginx, 3 app copies, Cassandra, and Redis with one command |
+| Cloud | Azure Cache for Redis | Managed cache used in one setup, over TLS |
 
 ---
 
-## How a request travels
+## Design choices
 
-**Creating a short link (`POST /shorten`)**
-1. Check the URL is valid.
-2. Make a short code (and try again if it happens to collide).
-3. Save it in the database and drop a copy in the cache.
-4. Return the short link.
+**1. Cassandra as the database.** A shortener asks the data one question: "which URL belongs to this code?" Cassandra answers that kind of lookup fast, and it can spread data across many machines.
 
-**Using a short link (`GET /{code}`)**
-1. The request hits **nginx**, which hands it to one of the three app copies.
-2. That copy looks in **Redis** first:
-   - **Found in cache** → answer right away.
-   - **Not in cache** → read from **Cassandra**, save it in Redis for next time, then answer.
-3. The app redirects the user to the original URL.
+**2. The cache is a wrapper.** The Redis layer wraps the database layer and shows the same interface. The rest of the code does not know the cache exists. Swapping between "database only" and "database + cache" is a one-line change in the service registration.
 
----
+**3. Configuration, not hardcoding.** The Cassandra host and the Redis address come from settings, with local defaults. The same app runs on a laptop, in Docker, or in the cloud without a code change. Passwords live in a local secret store, never in the repository.
 
-## The journey (why each choice)
-
-**1. Short codes with Base62.** The code needs to be short and unique. Base62 uses digits + lowercase + uppercase letters — all the characters that are safe in a URL. Just 7 of them cover about **3.5 trillion** links.
-
-**2. Cassandra as the database.** A shortener only ever looks things up one way: "give me the URL for this code." Cassandra is built exactly for that kind of lookup and can spread the data across many machines as it grows.
-
-**3. Redis as a cache.** Every redirect would otherwise hit the database — even though a popular link gives the *same answer* every time. Redis keeps hot links in memory, so repeated clicks are answered instantly and the database is left alone. It works well here because reads dominate, the data never changes, and a few links get most of the traffic.
-
-- The cache was added **without touching the rest of the code**, by wrapping the database layer in a caching layer that looks identical from the outside. Swapping between "database only" and "database + cache" is a one-line change.
-
-**4. Redirect type: 301 vs 302.** A `301` is remembered by the browser (super fast, but you can't count clicks). A `302` always comes back through the server (a bit slower, but you *can* track clicks and change the destination later). **I went with 302** to keep analytics possible.
-
-**5. Config instead of hardcoding.** Database and cache addresses aren't baked into the code — they're read from settings, with sensible defaults. So the same app runs on my laptop, in Docker, or in the cloud without any code change. Passwords live in a local secret store, never in the repo.
-
-**6. The app sets up its own database.** On startup it creates the keyspace and table if they don't exist yet — so a fresh database just works, no manual setup.
-
-**7. Docker.** The app is packaged into an image so it runs identically anywhere. The build is done in two stages: a heavy stage compiles it, and a light stage keeps only the finished app — so the final image stays small.
-
-**8. Load balancing with nginx + 3 copies.** One command (`docker compose up`) starts nginx, three app copies, Cassandra, and Redis, all wired together. nginx spreads requests across the copies in a simple rotation. A tiny `/whoami` endpoint proves it:
+**4. Load balancing you can see.** `GET /whoami` names the copy that answered:
 
 ```
 $ for i in {1..9}; do curl -s http://localhost:8080/whoami; echo; done
@@ -90,11 +133,9 @@ $ for i in {1..9}; do curl -s http://localhost:8080/whoami; echo; done
 
 ![Round-robin load balancing across three replicas](docs/round-robin.png)
 
-All six containers running together with one command:
+All six containers start with one command:
 
 ![The full stack running via Docker Compose](docs/docker-compose-up.png)
-
-**9. Moving the cache to Azure.** The Redis cache was migrated to **Azure Cache for Redis**, a managed service — Azure handles the upkeep, in exchange for cost and a bit less control. It connects securely over TLS, and the password stays in the local secret store.
 
 ---
 
@@ -102,18 +143,19 @@ All six containers running together with one command:
 
 | Decision | I chose | Why | The catch |
 |---|---|---|---|
-| Database | Cassandra | Scales sideways, perfect for simple lookups | Overkill for a small app — a single SQL database would be simpler |
-| Redirect | 302 | Lets me track clicks | A little slower than 301 |
-| Cache | Wrap the database in a caching layer | Keeps the code clean and easy to swap | One extra layer to maintain |
-| Managed vs self-hosted cache | Azure (managed) | No maintenance work | Costs money, less control |
+| Database | Cassandra | Scales sideways; perfect for one-key lookups | Too big for a small app — one SQL database would be simpler |
+| Redirect | 302 | Keeps click counting possible later | A little slower than 301; no counting is built yet |
+| Cache | Wrap the database in a cache layer | Keeps the code clean and easy to swap | One more layer; Redis becomes required at runtime |
+| Cache failure | Fail fast (no fallback) | Simple and honest for a study project | Redis down means the API answers 500 |
+| Managed vs self-hosted cache | Azure (managed) | No maintenance work | Costs money; less control |
 | Cache tier | Basic (cheapest) | Fine for a study project | No uptime guarantee; single node |
-| Load balancer | Local Docker + nginx | Fully offline, and you can see exactly how it works | It's not "the cloud" yet — that's the next step |
+| Load balancer | Local Docker + nginx | Fully offline; easy to inspect | Not "the cloud" yet — that is the next step |
 
 ---
 
 ## Running it locally
 
-You just need Docker Desktop.
+You need Docker Desktop.
 
 ```bash
 # from the folder with compose.yaml
@@ -123,7 +165,7 @@ docker compose up -d
 
 Then:
 
-- The app (behind the load balancer): `http://localhost:8080`
+- The app, behind the load balancer: `http://localhost:8080`
 - See the rotation: `for i in {1..9}; do curl -s http://localhost:8080/whoami; echo; done`
 - Shorten a link:
   ```bash
@@ -140,17 +182,19 @@ dotnet run
 # Swagger at http://localhost:<port>/swagger
 ```
 
+Swagger only exists in this Development mode. In Development, the Swagger middleware runs before the routes, so the 7-character path `/swagger` is served as the UI and is never treated as a short code.
+
 ---
 
 ## The Azure part
 
-The cache runs on **Azure Cache for Redis**:
+One setup ran the cache on **Azure Cache for Redis**:
 
-- Secure (TLS-only) connection.
-- The password is kept in a local secret store, never in the repo.
-- Public access has to be turned on deliberately — it starts off, which is actually a good security default.
+- The connection uses TLS only.
+- The password stays in a local secret store, never in the repository.
+- Public access starts off and must be turned on with intent — a good security default.
 
-Proof the app is caching in the managed cloud instance — `SCAN 0 MATCH url:*` returns the key the app wrote:
+Proof that the app wrote to the managed cache — `SCAN 0 MATCH url:*` returns the key the app wrote:
 
 ![Azure Redis Console — cached key](docs/azure-redis-console.png)
 
@@ -158,20 +202,19 @@ Proof the app is caching in the managed cloud instance — `SCAN 0 MATCH url:*` 
 
 ## What I learned
 
-- How short codes are made (Base62) and how many links they cover
-- How Cassandra stores data so lookups stay fast at scale
-- Why (and how) to put a cache in front of a database
-- Why keeping the app "memory-free" is what makes load balancing possible
-- How a load balancer spreads traffic across copies
+- How random base62 codes work and how many links 7 characters can cover
+- Why a conditional write (`IF NOT EXISTS`) is the only safe way to claim a code
+- Why and how to put a cache in front of a database
+- Why a "memory-free" app is what makes load balancing possible
+- How a load balancer spreads traffic, and why it must forward the `Host` header
 - How Docker packages an app, and how Compose runs many pieces together
 - How to keep passwords out of the code
-- The difference between running things yourself and using a managed cloud service
+- The difference between self-hosted services and a managed cloud service
 
 ---
 
 ## What's next
 
-- **Move the database to the cloud** (Azure Cosmos DB, which speaks Cassandra) — same code, just a different address.
+- **Move the database to the cloud** (Azure Cosmos DB, which speaks Cassandra) — same code, different address.
 - **Host the app in the cloud** (Azure Container Apps) with automatic scaling and load balancing.
-- **Cold storage (S3 / Azure Blob):** the system-design walkthrough this project was built from parks old, rarely-used links in **S3** — moved there during quiet hours so the main database stays lean and cheap. Hot links stay in Cassandra + Redis; only "cold" ones age out. Not built here yet — it's the natural next scaling step.
-```
+- **Cold storage (S3 / Azure Blob):** the system-design walkthrough parks old, rarely-used links in cold storage during quiet hours. Hot links stay in Cassandra + Redis. Not built here yet.
