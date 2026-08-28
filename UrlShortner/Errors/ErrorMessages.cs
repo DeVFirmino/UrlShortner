@@ -2,6 +2,9 @@ namespace UrlShortner.Errors;
 
 public static class ErrorMessages
 {
+    public const string InvalidRequestBody =
+        "The request body must be a JSON object with a url property.";
+
     public const string InvalidUrl = "The url must be an absolute http or https address.";
 
     public const string ShortCodeNotFound = "Short code not found.";

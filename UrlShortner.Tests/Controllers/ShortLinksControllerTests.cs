@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -10,7 +11,6 @@ using Microsoft.Extensions.Logging;
 using UrlShortner.Contracts;
 using UrlShortner.Controllers;
 using UrlShortner.Errors;
-using UrlShortner.Filters;
 using UrlShortner.Tests.Doubles;
 using UrlShortner.UseCases.ResolveShortCode;
 using UrlShortner.UseCases.ShortenUrl;
@@ -68,6 +68,30 @@ public sealed class ShortLinksControllerTests
         ErrorResponse? body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
 
         body!.Errors.Should().ContainSingle().Which.Should().Be(ErrorMessages.InvalidUrl);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("null")]
+    [InlineData("""{"url":null}""")]
+    [InlineData("""{"url":123}""")]
+    [InlineData("""{"url":"https://example.com" """)]
+    public async Task ShouldKeepTheErrorContractWhenTheBodyCannotBeRead(string body)
+    {
+        // BuildServer's default stubs throw if reached, so this also proves a
+        // body the binder cannot read never gets as far as the use case.
+        using TestServer server = BuildServer();
+        using HttpClient client = server.CreateClient();
+
+        using StringContent content = new(body, Encoding.UTF8, "application/json");
+        HttpResponseMessage response = await client.PostAsync("/shorten", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        ErrorResponse? errors = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+
+        errors!.Errors.Should().ContainSingle().Which.Should().Be(
+            ErrorMessages.InvalidRequestBody);
     }
 
     [Fact]
@@ -159,7 +183,7 @@ public sealed class ShortLinksControllerTests
                         "resolving was not expected in this test"))));
 
                 services
-                    .AddControllers(options => options.Filters.Add<ExceptionFilter>())
+                    .AddApi()
                     .AddApplicationPart(typeof(ShortLinksController).Assembly);
             })
             .Configure(app =>
