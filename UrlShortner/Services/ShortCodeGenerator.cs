@@ -1,6 +1,6 @@
 namespace UrlShortner.Services;
 
-public class ShortCodeGenerator
+public class ShortCodeGenerator : IShortCodeGenerator
 {
     
     //base 62 - 10 digits + 26 minchar + 26max char = 62 symbols
