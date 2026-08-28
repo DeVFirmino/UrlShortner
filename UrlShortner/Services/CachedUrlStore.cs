@@ -16,12 +16,18 @@ public class CachedUrlStore : IUrlStore
         _inner = inner;
         _cache = redis.GetDatabase();
     }
-    public Task<bool> ExistsAsync(string code) => _inner.ExistsAsync(code);
 
-    public async Task SaveAsync(ShortenedUrl url)
+    public async Task<bool> TryInsertAsync(ShortenedUrl url)
     {
-        await _inner.SaveAsync(url);
+        // Only cache a code this call actually claimed. Caching a rejected insert
+        // would serve someone else's destination from the cache.
+        if (await _inner.TryInsertAsync(url) is false)
+        {
+            return false;
+        }
+
         await _cache.StringSetAsync($"url:{url.Code}", JsonSerializer.Serialize(url), Ttl);
+        return true;
     }
 
     public async Task<ShortenedUrl?> GetByCodeAsync(string code)

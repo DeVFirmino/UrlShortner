@@ -47,8 +47,8 @@ The trick that makes this work: the app doesn't keep anything in its own memory 
 
 **Creating a short link (`POST /shorten`)**
 1. Check the URL is valid.
-2. Make a short code (and try again if it happens to collide).
-3. Save it in the database and drop a copy in the cache.
+2. Make a short code and claim it with a conditional write — if another request already holds that code, draw a new one and try again.
+3. Drop a copy in the cache, now that the code is safely ours.
 4. Return the short link.
 
 **Using a short link (`GET /{code}`)**
@@ -65,6 +65,8 @@ The trick that makes this work: the app doesn't keep anything in its own memory 
 **1. Short codes with Base62.** The code needs to be short and unique. Base62 uses digits + lowercase + uppercase letters — all the characters that are safe in a URL. Just 7 of them cover about **3.5 trillion** links.
 
 **2. Cassandra as the database.** A shortener only ever looks things up one way: "give me the URL for this code." Cassandra is built exactly for that kind of lookup and can spread the data across many machines as it grows.
+
+- Claiming a code uses `INSERT ... IF NOT EXISTS`. This matters more than it looks: a plain Cassandra `INSERT` is an *upsert*, so if two requests happen to draw the same code, both writes "succeed" and the second silently replaces the first — leaving a live short link pointing at somebody else's destination. Asking "does this code exist?" first does not help either, because both requests can be told "no" before either of them writes. The conditional write makes Cassandra choose a single winner, and the loser simply draws another code.
 
 **3. Redis as a cache.** Every redirect would otherwise hit the database — even though a popular link gives the *same answer* every time. Redis keeps hot links in memory, so repeated clicks are answered instantly and the database is left alone. It works well here because reads dominate, the data never changes, and a few links get most of the traffic.
 
