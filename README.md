@@ -38,8 +38,6 @@ nginx also passes the caller's `Host` header to the app. The app builds the shor
 
 ## How a short link is created
 
-![Flowchart of POST /shorten: validate the URL, draw a random seven-character code, claim it in Cassandra with a conditional insert, draw again on a collision up to five times, cache the winner in Redis, answer 201, 400, or 503](docs/img/shorten-flow.svg)
-
 Step by step:
 
 1. The app checks the URL. The URL must be absolute, and its scheme must be `http` or `https`. The app rejects `ftp://`, relative paths, and empty strings with `400`.
