@@ -8,7 +8,7 @@ using UrlShortner.UseCases.ShortenUrl;
 
 namespace UrlShortner.Tests.UseCases.ShortenUrl;
 
-public class ShortenUrlUseCaseTests
+public sealed class ShortenUrlUseCaseTests
 {
     private const string BaseUrl = "https://sho.rt";
     private const string CollidingCode = "aaaaaaa";

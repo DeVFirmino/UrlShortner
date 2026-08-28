@@ -6,7 +6,7 @@ using UrlShortner.UseCases.ResolveShortCode;
 
 namespace UrlShortner.Tests.UseCases.ResolveShortCode;
 
-public class ResolveShortCodeUseCaseTests
+public sealed class ResolveShortCodeUseCaseTests
 {
     private const string KnownCode = "aaaaaaa";
     private const string Destination = "https://example.com/page";

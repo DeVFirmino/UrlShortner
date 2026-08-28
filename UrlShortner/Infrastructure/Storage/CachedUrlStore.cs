@@ -34,6 +34,11 @@ public sealed class CachedUrlStore : IUrlStore
 
     public async Task<ShortenedUrl?> GetByCodeAsync(string code, CancellationToken cancellationToken)
     {
+        // Redis's async API takes no CancellationToken either, so this store
+        // honours the token at its own boundary too: on a cache hit the inner
+        // store's check is never reached.
+        cancellationToken.ThrowIfCancellationRequested();
+
         string key = KeyFor(code);
 
         RedisValue cached = await _cache.StringGetAsync(key);

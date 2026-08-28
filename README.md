@@ -176,4 +176,3 @@ Proof the app is caching in the managed cloud instance — `SCAN 0 MATCH url:*` 
 - **Move the database to the cloud** (Azure Cosmos DB, which speaks Cassandra) — same code, just a different address.
 - **Host the app in the cloud** (Azure Container Apps) with automatic scaling and load balancing.
 - **Cold storage (S3 / Azure Blob):** the system-design walkthrough this project was built from parks old, rarely-used links in **S3** — moved there during quiet hours so the main database stays lean and cheap. Hot links stay in Cassandra + Redis; only "cold" ones age out. Not built here yet — it's the natural next scaling step.
-```
