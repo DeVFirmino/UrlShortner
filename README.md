@@ -24,7 +24,7 @@ Three facts to know:
 
 ## How a short link is created and opened
 
-![Two-part flow diagram showing how the app creates a short link and how Redis and Cassandra help the app open it](docs/img/architecture.svg)
+![Two-part flow diagram showing how the app creates a short link, how Redis and Cassandra help the app open it, and the errors each path can return](docs/img/architecture.svg)
 
 *Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw) — open it on [excalidraw.com](https://excalidraw.com) and export the SVG again after changes.*
 
