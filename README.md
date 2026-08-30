@@ -22,11 +22,13 @@ Three facts to know:
 
 ---
 
-## The big picture
+## How a short link is created and opened
 
-![Diagram showing how a person creates or opens a short link, nginx shares requests between ASP.NET Core app copies, Redis caches popular links, and Cassandra keeps every link](docs/img/architecture.svg)
+![Two-part flow diagram showing how the app creates a short link, how Redis and Cassandra help the app open it, and the errors each path can return](docs/img/architecture.svg)
 
 *Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw) — open it on [excalidraw.com](https://excalidraw.com) and export the SVG again after changes.*
+
+### How requests reach the app
 
 Three identical copies of the app run at the same time. **nginx** sits in front and gives each request to one of the copies, in rotation. All three copies share one **Cassandra** database and one **Redis** cache.
 
@@ -37,8 +39,6 @@ nginx also passes the caller's `Host` header to the app. The app builds the shor
 ---
 
 ## How a short link is created
-
-![Flowchart of POST /shorten: validate the URL, draw a random seven-character code, claim it in Cassandra with a conditional insert, draw again on a collision up to five times, cache the winner in Redis, answer 201, 400, or 503](docs/img/shorten-flow.svg)
 
 Step by step:
 
