@@ -34,7 +34,7 @@ Three identical copies of the app run at the same time. **nginx** sits in front 
 
 The app keeps no data in its own memory. All data lives in the database and the cache. So every copy sees the same data, and any copy can answer any request. That is what lets you add more copies when traffic grows.
 
-nginx also passes the caller's `Host` header to the app. The app builds the short link from that header. So the link you get back (`http://localhost:8080/{code}`) works from outside. Without this nginx setting, the link would carry an internal host name and would not work.
+The app builds short links from `PublicOrigin:BaseUrl`, not the caller's `Host` header. The local compose setup sets it to `http://localhost:8080`, so the returned link is `http://localhost:8080/{code}`. Set `PublicOrigin__BaseUrl` to the public HTTP or HTTPS origin when deploying elsewhere; the app refuses to start without a valid value outside Development.
 
 ---
 
