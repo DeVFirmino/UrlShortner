@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using UrlShortner.Contracts;
+using UrlShortner.Options;
 using UrlShortner.UseCases.ResolveShortCode;
 using UrlShortner.UseCases.ShortenUrl;
 
@@ -18,20 +20,18 @@ public sealed class ShortLinksController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> ShortenUrl(
         [FromServices] IShortenUrlUseCase useCase,
+        [FromServices] IOptions<PublicOriginOptions> publicOrigin,
         [FromBody] ShortenUrlRequest request,
         CancellationToken cancellationToken)
     {
-        string baseUrl = $"{Request.Scheme}://{Request.Host}";
+        string baseUrl = publicOrigin.Value.BaseUrl.TrimEnd('/');
 
         ShortenUrlResponse response = await useCase.Execute(
             request,
             baseUrl,
             cancellationToken);
 
-        return CreatedAtAction(
-            nameof(ResolveShortCode),
-            new { code = response.Code },
-            response);
+        return Created(response.ShortUrl, response);
     }
 
     // The length constraint keeps paths that cannot be codes, such as
