@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using UrlShortner.Contracts;
 using UrlShortner.Controllers;
 using UrlShortner.Errors;
+using UrlShortner.Options;
 using UrlShortner.Tests.Doubles;
 using UrlShortner.UseCases.ResolveShortCode;
 using UrlShortner.UseCases.ShortenUrl;
@@ -50,6 +51,30 @@ public sealed class ShortLinksControllerTests
 
         body!.Code.Should().Be(Code);
         body.ShortUrl.Should().EndWith($"/{Code}");
+    }
+
+    [Fact]
+    public async Task ShouldUseConfiguredOriginWhenHostHeaderIsArbitrary()
+    {
+        using TestServer server = BuildServer(
+            shorten: (request, baseUrl) => new ShortenUrlResponse
+            {
+                Code = Code,
+                ShortUrl = $"{baseUrl}/{Code}",
+            });
+        using HttpClient client = server.CreateClient();
+        using HttpRequestMessage request = new(HttpMethod.Post, "/shorten")
+        {
+            Content = JsonContent.Create(new ShortenUrlRequest { Url = Destination }),
+            Headers = { Host = "attacker.example" },
+        };
+
+        HttpResponseMessage response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        response.Headers.Location!.ToString().Should().Be($"https://short.example/{Code}");
+        ShortenUrlResponse? body = await response.Content.ReadFromJsonAsync<ShortenUrlResponse>();
+        body!.ShortUrl.Should().Be($"https://short.example/{Code}");
     }
 
     [Fact]
@@ -173,6 +198,8 @@ public sealed class ShortLinksControllerTests
             .ConfigureServices(services =>
             {
                 services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.None));
+                services.Configure<PublicOriginOptions>(options =>
+                    options.BaseUrl = "https://short.example");
 
                 services.AddSingleton<IShortenUrlUseCase>(new StubShortenUrlUseCase(
                     shorten ?? ((request, baseUrl) => throw new InvalidOperationException(
