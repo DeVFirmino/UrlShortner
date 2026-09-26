@@ -1,4 +1,4 @@
-# URL Shortener — a System Design Study in .NET
+# URL shortener: a system design study in .NET
 
 This software makes short links. You give it a long web address. It gives you back a short link, for example `http://localhost:8080/jxs3y2C`. When somebody opens the short link, the software sends the browser to the long address.
 
