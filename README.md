@@ -2,6 +2,8 @@
 
 This software makes short links. You give it a long web address. It gives you back a short link, for example `http://localhost:8080/jxs3y2C`. When somebody opens the short link, the software sends the browser to the long address.
 
+![Animation: a long link becomes a short one, you send it to a friend, they tap it and land on the original page.](docs/how-it-works.gif)
+
 I built it as a study project in **.NET 9**. It uses a **Cassandra** database, a **Redis** cache, and an **nginx** load balancer. One part of it ran on **Azure**.
 
 > **Why I built this:** I watched a [system design video about a URL shortener](https://www.youtube.com/watch?v=m_anIoKW7Jg). I did not want to only watch. I built the system to understand how the load balancer, the database, and the cache work together.
